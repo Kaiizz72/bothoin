@@ -1,50 +1,46 @@
-// bot.js — SMP PvP bots (lite version)
-// - Không pathfinder, không mineflayer-pvp (đỡ lag)
-// - Vào là /kit smp
-// - Đứng yên, thấy người chơi nào lại gần thì quay mặt + đánh
-// - Chết → respawn → /kit smp → đánh tiếp
+// bot.js — SMP PvP Bots LITE (STABLE FINAL)
+// ✅ Không pathfinder, không mineflayer-pvp (siêu nhẹ)
+// ✅ FIX crash chat 1.21.x (unknown chat format code)
+// ✅ Auto /kit smp
+// ✅ Đứng yên, player lại gần thì quay mặt + đánh
+// ✅ Chết → respawn → /kit smp → đánh tiếp
 
 const mineflayer = require('mineflayer')
 
 // ===== CONFIG SERVER =====
 const SERVER_HOST = process.env.SERVER_HOST || 'node1.lumine.asia'
 const SERVER_PORT = Number(process.env.SERVER_PORT || 25675)
-const AUTH_MODE = 'offline'          // server crack thì để offline
-const SERVER_VERSION = '1.21.4'      // đúng version server của bạn
+const AUTH_MODE = 'offline'
+const SERVER_VERSION = '1.21.4'
 
 // ===== SETTINGS =====
-const MAX_BOTS = 15                  // ⚠️ BẮT ĐẦU 15 CON THÔI
-const JOIN_DELAY = 5000              // 5s mỗi bot cho an toàn
+const MAX_BOTS = 12         // ⚠️ 10–12 con cho điện thoại / GitHub
+const JOIN_DELAY = 6000     // 6 giây mỗi bot (tránh spam connect)
 
-// ===== BOT NAMES (Việt + English trộn) =====
+// ===== BOT NAMES =====
 const NAMES = [
   'CuongCute','BaoDepTrai','LinhXinh','AnhHungVN','ThanhNienVN',
   'NoobViet','ProViet','VietGamer','BaoKing','HuyLegend',
   'PhongSky','MinhDark','KietFire','ZenoVN','KenjiVN',
-  'DarkBoyVN','SweetGirl','LazyCatVN','TryHarder','SnowAngel',
-  'NightWolf','RedPandaVN','KaiVN','ZeroVN','MonkeyKing',
-  'FoxCuteVN','RainyDay','SunnyVN','DragonVN','ShadowVN',
-  'NhaQueVN','CuTichVN','TimNang','YasuoMain','JungleBoy',
-  'MidLaneVN','TopLaneVN','Memaybel','ChaoHet','BotSMP'
+  'DarkBoyVN','LazyCatVN','TryHarder','SnowAngel','NightWolf'
 ].slice(0, MAX_BOTS)
 
 function sleep (ms) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-// ===== KIT =====
+// ===== /KIT =====
 function giveKit (bot) {
   setTimeout(() => {
     try { bot.chat('/kit smp') } catch {}
-  }, 2000)
+  }, 2500)
 }
 
-// ===== SIMPLE COMBAT (rất nhẹ, không pathfinder) =====
-function setupSimpleCombat (bot) {
+// ===== COMBAT AI (SIÊU NHẸ) =====
+function setupCombat (bot) {
   setInterval(async () => {
     if (!bot.entity || bot.health <= 0) return
 
-    // Tìm player gần nhất
     const target = bot.nearestEntity(e =>
       e.type === 'player' &&
       e.username !== bot.username
@@ -52,19 +48,14 @@ function setupSimpleCombat (bot) {
 
     if (!target) return
 
-    // Chỉ đánh nếu trong phạm vi ~4 block
     const dist = bot.entity.position.distanceTo(target.position)
     if (dist > 4) return
 
     try {
-      // Quay mặt vào người ta
       await bot.lookAt(target.position.offset(0, 1.6, 0), true)
-      // Vung tay đánh
       bot.attack(target)
-    } catch (e) {
-      // bỏ qua lỗi nhỏ
-    }
-  }, 600) // ~1.6 hit/s cho đỡ dính anti-cheat, đỡ lag
+    } catch {}
+  }, 700) // ~1.4 hit/s – rất an toàn
 }
 
 // ===== CREATE BOT =====
@@ -77,6 +68,11 @@ function createBot (name) {
     version: SERVER_VERSION
   })
 
+  // ✅ FIX CRASH CHAT 1.21.x (QUAN TRỌNG)
+  bot._client.on('chat', () => {})
+  bot._client.on('system_chat', () => {})
+  bot._client.on('player_chat', () => {})
+
   bot.on('spawn', () => {
     console.log(`[${name}] spawned`)
     giveKit(bot)
@@ -88,16 +84,16 @@ function createBot (name) {
   })
 
   bot.on('death', () => {
-    console.log(`[${name}] died → respawn soon`)
+    console.log(`[${name}] died`)
     setTimeout(() => {
       try { bot.respawn() } catch {}
     }, 2000)
   })
 
-  setupSimpleCombat(bot)
+  setupCombat(bot)
 
-  bot.on('kicked', r => console.log(`[${name}] kicked:`, r))
-  bot.on('error', e => console.log(`[${name}] error:`, e))
+  bot.on('kicked', r => console.log(`[${name}] kicked`))
+  bot.on('error', e => console.log(`[${name}] error`))
 
   return bot
 }
