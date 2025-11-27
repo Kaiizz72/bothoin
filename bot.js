@@ -2,7 +2,6 @@
 
 const mineflayer = require('mineflayer')
 const { pathfinder, goals: { GoalXZ } } = require('mineflayer-pathfinder')
-const autoEat = require('mineflayer-auto-eat').plugin
 const pvp = require('mineflayer-pvp').plugin
 
 // ==== CẤU HÌNH SERVER CỦA BẠN ====
