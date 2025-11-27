@@ -1,4 +1,4 @@
-// bot.js — SMP PvP Bots LITE (STABLE FINAL)
+// bot.js MP PvP Bots LITE (STABLE FINAL)
 // ✅ Không pathfinder, không mineflayer-pvp (siêu nhẹ)
 // ✅ FIX crash chat 1.21.x (unknown chat format code)
 // ✅ Auto /kit smp
