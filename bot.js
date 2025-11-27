@@ -11,7 +11,7 @@ const mineflayer = require('mineflayer')
 const SERVER_HOST = process.env.SERVER_HOST || 'node1.lumine.asia'
 const SERVER_PORT = Number(process.env.SERVER_PORT || 25675)
 const AUTH_MODE = 'offline'
-const SERVER_VERSION = '1.21.4'
+const SERVER_VERSION = '1.20'
 
 // ===== SETTINGS =====
 const MAX_BOTS = 12         // ⚠️ 10–12 con cho điện thoại / GitHub
