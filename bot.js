@@ -1,22 +1,20 @@
-// bot.js — 40 SMP PvP bots (anti-kick version)
-// - Auto /register + /login (nếu có auth plugin)
-// - Auto /kit smp sau khi login
-// - Chết → respawn → login lại → /kit smp → đánh tiếp
-// - Giảm CPS + bớt di chuyển ảo để đỡ bị anti-cheat đá
+// bot.js — SMP PvP bots (lite version)
+// - Không pathfinder, không mineflayer-pvp (đỡ lag)
+// - Vào là /kit smp
+// - Đứng yên, thấy người chơi nào lại gần thì quay mặt + đánh
+// - Chết → respawn → /kit smp → đánh tiếp
 
 const mineflayer = require('mineflayer')
-const { pathfinder } = require('mineflayer-pathfinder')
-const { goals: { GoalXZ } } = require('mineflayer-pathfinder') // vẫn import nếu sau này cần
-const pvp = require('mineflayer-pvp').plugin
 
 // ===== CONFIG SERVER =====
 const SERVER_HOST = process.env.SERVER_HOST || 'node1.lumine.asia'
 const SERVER_PORT = Number(process.env.SERVER_PORT || 25675)
-const AUTH_MODE = 'offline' // server crack thì để offline
+const AUTH_MODE = 'offline'          // server crack thì để offline
+const SERVER_VERSION = '1.21.4'      // đúng version server của bạn
 
 // ===== SETTINGS =====
-const MAX_BOTS = 40
-const JOIN_DELAY = 5000 // tăng delay join mỗi bot lên 5s cho an toàn
+const MAX_BOTS = 15                  // ⚠️ BẮT ĐẦU 15 CON THÔI
+const JOIN_DELAY = 5000              // 5s mỗi bot cho an toàn
 
 // ===== BOT NAMES (Việt + English trộn) =====
 const NAMES = [
@@ -30,82 +28,62 @@ const NAMES = [
   'MidLaneVN','TopLaneVN','Memaybel','ChaoHet','BotSMP'
 ].slice(0, MAX_BOTS)
 
-function sleep(ms) {
+function sleep (ms) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-// ===== AUTH + KIT =====
-
-// gửi /register & /login (nếu sv không dùng auth plugin thì nó sẽ bị ignore, không sao)
-function authLogin(bot) {
-  // đổi pass nếu bạn muốn
-  const pass = '123456'
-
-  setTimeout(() => {
-    try { bot.chat(`/register ${pass} ${pass}`) } catch {}
-  }, 1000)
-
-  setTimeout(() => {
-    try { bot.chat(`/login ${pass}`) } catch {}
-  }, 3000)
-}
-
-// gọi /kit smp sau khi chắc chắn đã login xong
-function giveKit(bot) {
+// ===== KIT =====
+function giveKit (bot) {
   setTimeout(() => {
     try { bot.chat('/kit smp') } catch {}
-  }, 5000)
+  }, 2000)
 }
 
-// ===== COMBAT AI (giảm CPS, đỡ spam) =====
-function setupCombat(bot) {
-  // tick combat ~ mỗi 400ms (2.5 hit/s)
-  setInterval(() => {
+// ===== SIMPLE COMBAT (rất nhẹ, không pathfinder) =====
+function setupSimpleCombat (bot) {
+  setInterval(async () => {
     if (!bot.entity || bot.health <= 0) return
 
+    // Tìm player gần nhất
     const target = bot.nearestEntity(e =>
       e.type === 'player' &&
       e.username !== bot.username
     )
 
-    if (!target) {
-      if (bot.pvp.target) bot.pvp.stop()
-      return
-    }
+    if (!target) return
 
-    // chỉ set target khi khác hoặc chưa có
-    if (!bot.pvp.target || bot.pvp.target !== target) {
-      bot.pvp.attack(target)
+    // Chỉ đánh nếu trong phạm vi ~4 block
+    const dist = bot.entity.position.distanceTo(target.position)
+    if (dist > 4) return
+
+    try {
+      // Quay mặt vào người ta
+      await bot.lookAt(target.position.offset(0, 1.6, 0), true)
+      // Vung tay đánh
+      bot.attack(target)
+    } catch (e) {
+      // bỏ qua lỗi nhỏ
     }
-  }, 400)
+  }, 600) // ~1.6 hit/s cho đỡ dính anti-cheat, đỡ lag
 }
 
-// (KHÔNG wander random nữa để tránh motion lố)
-// nếu sau này cần cho tụi nó đi dạo thì bật lại nhưng giờ tắt cho an toàn
-
 // ===== CREATE BOT =====
-function createBot(name) {
+function createBot (name) {
   const bot = mineflayer.createBot({
     host: SERVER_HOST,
     port: SERVER_PORT,
     username: name,
     auth: AUTH_MODE,
-    version: '1.21.4'
+    version: SERVER_VERSION
   })
-
-  bot.loadPlugin(pathfinder)
-  bot.loadPlugin(pvp)
 
   bot.on('spawn', () => {
     console.log(`[${name}] spawned`)
-    authLogin(bot)
     giveKit(bot)
   })
 
   bot.on('respawn', () => {
     console.log(`[${name}] respawn`)
-    // Nhiều auth plugin bắt login lại khi respawn (tùy), cứ gửi lại cho chắc
-    authLogin(bot)
     giveKit(bot)
   })
 
@@ -116,7 +94,7 @@ function createBot(name) {
     }, 2000)
   })
 
-  setupCombat(bot)
+  setupSimpleCombat(bot)
 
   bot.on('kicked', r => console.log(`[${name}] kicked:`, r))
   bot.on('error', e => console.log(`[${name}] error:`, e))
