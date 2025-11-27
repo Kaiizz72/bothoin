@@ -1,108 +1,116 @@
-// bot.js MP PvP Bots LITE (STABLE FINAL)
-// ✅ Không pathfinder, không mineflayer-pvp (siêu nhẹ)
-// ✅ FIX crash chat 1.21.x (unknown chat format code)
+// bot.js — SMP PvP BOT LITE (FINAL + AUTO REJOIN ✅)
+// ✅ FIX TRIỆT ĐỂ CHAT 1.21 (unknown chat format)
 // ✅ Auto /kit smp
-// ✅ Đứng yên, player lại gần thì quay mặt + đánh
-// ✅ Chết → respawn → /kit smp → đánh tiếp
+// ✅ Auto reconnect khi bị kick / disconnect
+// ✅ Siêu nhẹ – chạy được GitHub / Termux
 
 const mineflayer = require('mineflayer')
 
 // ===== CONFIG SERVER =====
-const SERVER_HOST = process.env.SERVER_HOST || 'node1.lumine.asia'
-const SERVER_PORT = Number(process.env.SERVER_PORT || 25675)
-const AUTH_MODE = 'offline'
+const SERVER_HOST = 'node1.lumine.asia'
+const SERVER_PORT = 25675
 const SERVER_VERSION = '1.20'
 
-// ===== SETTINGS =====
-const MAX_BOTS = 12         // ⚠️ 10–12 con cho điện thoại / GitHub
-const JOIN_DELAY = 6000     // 6 giây mỗi bot (tránh spam connect)
+// ===== BOT SETTINGS =====
+const MAX_BOTS = 10
+const JOIN_DELAY = 7000         // delay giữa bot
+const REJOIN_DELAY = 10000      // delay khi bị kick rồi join lại (10s)
 
 // ===== BOT NAMES =====
 const NAMES = [
   'CuongCute','BaoDepTrai','LinhXinh','AnhHungVN','ThanhNienVN',
-  'NoobViet','ProViet','VietGamer','BaoKing','HuyLegend',
-  'PhongSky','MinhDark','KietFire','ZenoVN','KenjiVN',
-  'DarkBoyVN','LazyCatVN','TryHarder','SnowAngel','NightWolf'
+  'NoobViet','ProViet','VietGamer','BaoKing','HuyLegend'
 ].slice(0, MAX_BOTS)
 
-function sleep (ms) {
-  return new Promise(r => setTimeout(r, ms))
+// ===== FIX CHAT 1.21 — BLOCK AT PROTOCOL LEVEL =====
+const framing = require('minecraft-protocol/src/transforms/framing')
+const oldPacketNeedsFraming = framing.packetNeedsFraming
+framing.packetNeedsFraming = function (packet) {
+  if (
+    packet?.name === 'chat' ||
+    packet?.name === 'player_chat' ||
+    packet?.name === 'system_chat'
+  ) return false
+  return oldPacketNeedsFraming(packet)
 }
 
-// ===== /KIT =====
-function giveKit (bot) {
+// ===== UTILS =====
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+function giveKit(bot) {
   setTimeout(() => {
     try { bot.chat('/kit smp') } catch {}
-  }, 2500)
+  }, 3000)
 }
 
-// ===== COMBAT AI (SIÊU NHẸ) =====
-function setupCombat (bot) {
+// ===== COMBAT (NHẸ) =====
+function combat(bot) {
   setInterval(async () => {
     if (!bot.entity || bot.health <= 0) return
 
     const target = bot.nearestEntity(e =>
-      e.type === 'player' &&
-      e.username !== bot.username
+      e.type === 'player' && e.username !== bot.username
     )
-
     if (!target) return
 
-    const dist = bot.entity.position.distanceTo(target.position)
-    if (dist > 4) return
+    const d = bot.entity.position.distanceTo(target.position)
+    if (d > 4) return
 
     try {
       await bot.lookAt(target.position.offset(0, 1.6, 0), true)
       bot.attack(target)
     } catch {}
-  }, 700) // ~1.4 hit/s – rất an toàn
+  }, 800)
 }
 
-// ===== CREATE BOT =====
-function createBot (name) {
+// ===== BOT FACTORY (AUTO REJOIN) =====
+function spawnBot(name) {
+  console.log(`[BOT] spawning ${name}`)
+
   const bot = mineflayer.createBot({
     host: SERVER_HOST,
     port: SERVER_PORT,
     username: name,
-    auth: AUTH_MODE,
-    version: SERVER_VERSION
+    auth: 'offline',
+    version: SERVER_VERSION,
+    hideErrors: true
   })
 
-  // ✅ FIX CRASH CHAT 1.21.x (QUAN TRỌNG)
-  bot._client.on('chat', () => {})
-  bot._client.on('system_chat', () => {})
-  bot._client.on('player_chat', () => {})
+  let reconnecting = false
+
+  function scheduleRejoin(reason) {
+    if (reconnecting) return
+    reconnecting = true
+    console.log(`[${name}] disconnected (${reason}) → rejoin in ${REJOIN_DELAY / 1000}s`)
+    setTimeout(() => spawnBot(name), REJOIN_DELAY)
+  }
 
   bot.on('spawn', () => {
-    console.log(`[${name}] spawned`)
+    console.log(`[${name}] joined`)
     giveKit(bot)
   })
 
-  bot.on('respawn', () => {
-    console.log(`[${name}] respawn`)
-    giveKit(bot)
-  })
+  bot.on('respawn', () => giveKit(bot))
 
   bot.on('death', () => {
-    console.log(`[${name}] died`)
     setTimeout(() => {
       try { bot.respawn() } catch {}
     }, 2000)
   })
 
-  setupCombat(bot)
+  // ✅ AUTO REJOIN
+  bot.on('kicked', reason => scheduleRejoin('kick'))
+  bot.on('end', () => scheduleRejoin('end'))
+  bot.on('error', () => scheduleRejoin('error'))
 
-  bot.on('kicked', r => console.log(`[${name}] kicked`))
-  bot.on('error', e => console.log(`[${name}] error`))
-
+  combat(bot)
   return bot
 }
 
-// ===== START =====
+// ===== START ALL BOTS =====
 ;(async () => {
   for (const name of NAMES) {
-    console.log(`Creating bot ${name}...`)
-    createBot(name)
+    spawnBot(name)
     await sleep(JOIN_DELAY)
   }
 })()
