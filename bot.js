@@ -13,8 +13,8 @@ const SERVER_VERSION = '1.20'
 
 // ===== BOT SETTINGS =====
 const MAX_BOTS = 10
-const JOIN_DELAY = 7000         // delay giữa bot
-const REJOIN_DELAY = 10000      // delay khi bị kick rồi join lại (10s)
+const JOIN_DELAY = 9000         // delay giữa bot
+const REJOIN_DELAY = 20000      // delay khi bị kick rồi join lại (10s)
 
 // ===== BOT NAMES =====
 const NAMES = [
