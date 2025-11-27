@@ -1,20 +1,22 @@
-// bot.js — 40 SMP PvP bots
-// - KHÔNG autoeat
-// - Auto /kit smp
-// - Chết → respawn → /kit smp → đánh tiếp
+// bot.js — 40 SMP PvP bots (anti-kick version)
+// - Auto /register + /login (nếu có auth plugin)
+// - Auto /kit smp sau khi login
+// - Chết → respawn → login lại → /kit smp → đánh tiếp
+// - Giảm CPS + bớt di chuyển ảo để đỡ bị anti-cheat đá
 
 const mineflayer = require('mineflayer')
-const { pathfinder, goals: { GoalXZ } } = require('mineflayer-pathfinder')
+const { pathfinder } = require('mineflayer-pathfinder')
+const { goals: { GoalXZ } } = require('mineflayer-pathfinder') // vẫn import nếu sau này cần
 const pvp = require('mineflayer-pvp').plugin
 
 // ===== CONFIG SERVER =====
 const SERVER_HOST = process.env.SERVER_HOST || 'node1.lumine.asia'
 const SERVER_PORT = Number(process.env.SERVER_PORT || 25675)
-const AUTH_MODE = 'offline'
+const AUTH_MODE = 'offline' // server crack thì để offline
 
 // ===== SETTINGS =====
 const MAX_BOTS = 40
-const JOIN_DELAY = 2500
+const JOIN_DELAY = 5000 // tăng delay join mỗi bot lên 5s cho an toàn
 
 // ===== BOT NAMES (Việt + English trộn) =====
 const NAMES = [
@@ -32,19 +34,34 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-// ===== GIVE KIT =====
-function giveKit(bot) {
+// ===== AUTH + KIT =====
+
+// gửi /register & /login (nếu sv không dùng auth plugin thì nó sẽ bị ignore, không sao)
+function authLogin(bot) {
+  // đổi pass nếu bạn muốn
+  const pass = '123456'
+
   setTimeout(() => {
-    try {
-      bot.chat('/kit smp')
-    } catch {}
-  }, 1500)
+    try { bot.chat(`/register ${pass} ${pass}`) } catch {}
+  }, 1000)
+
+  setTimeout(() => {
+    try { bot.chat(`/login ${pass}`) } catch {}
+  }, 3000)
 }
 
-// ===== COMBAT AI =====
+// gọi /kit smp sau khi chắc chắn đã login xong
+function giveKit(bot) {
+  setTimeout(() => {
+    try { bot.chat('/kit smp') } catch {}
+  }, 5000)
+}
+
+// ===== COMBAT AI (giảm CPS, đỡ spam) =====
 function setupCombat(bot) {
-  bot.on('physicTick', () => {
-    if (bot.health <= 0) return
+  // tick combat ~ mỗi 400ms (2.5 hit/s)
+  setInterval(() => {
+    if (!bot.entity || bot.health <= 0) return
 
     const target = bot.nearestEntity(e =>
       e.type === 'player' &&
@@ -56,21 +73,15 @@ function setupCombat(bot) {
       return
     }
 
+    // chỉ set target khi khác hoặc chưa có
     if (!bot.pvp.target || bot.pvp.target !== target) {
       bot.pvp.attack(target)
     }
-  })
+  }, 400)
 }
 
-// ===== RANDOM MOVE =====
-function wander(bot) {
-  setInterval(() => {
-    if (!bot.entity) return
-    const x = bot.entity.position.x + (Math.random() * 16 - 8)
-    const z = bot.entity.position.z + (Math.random() * 16 - 8)
-    bot.pathfinder.setGoal(new GoalXZ(x, z), false)
-  }, 12000)
-}
+// (KHÔNG wander random nữa để tránh motion lố)
+// nếu sau này cần cho tụi nó đi dạo thì bật lại nhưng giờ tắt cho an toàn
 
 // ===== CREATE BOT =====
 function createBot(name) {
@@ -85,24 +96,26 @@ function createBot(name) {
   bot.loadPlugin(pvp)
 
   bot.on('spawn', () => {
-    console.log(`[${name}] joined`)
+    console.log(`[${name}] spawned`)
+    authLogin(bot)
     giveKit(bot)
   })
 
   bot.on('respawn', () => {
     console.log(`[${name}] respawn`)
+    // Nhiều auth plugin bắt login lại khi respawn (tùy), cứ gửi lại cho chắc
+    authLogin(bot)
     giveKit(bot)
   })
 
   bot.on('death', () => {
-    console.log(`[${name}] died → respawn`)
+    console.log(`[${name}] died → respawn soon`)
     setTimeout(() => {
       try { bot.respawn() } catch {}
     }, 2000)
   })
 
   setupCombat(bot)
-  wander(bot)
 
   bot.on('kicked', r => console.log(`[${name}] kicked:`, r))
   bot.on('error', e => console.log(`[${name}] error:`, e))
@@ -113,6 +126,7 @@ function createBot(name) {
 // ===== START =====
 ;(async () => {
   for (const name of NAMES) {
+    console.log(`Creating bot ${name}...`)
     createBot(name)
     await sleep(JOIN_DELAY)
   }
