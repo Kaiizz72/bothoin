@@ -90,6 +90,7 @@ function createBot(name) {
     port: SERVER_PORT,
     username: name,
     auth: AUTH_MODE
+    version: '1.21.4'
   })
 
   bot.loadPlugin(pathfinder)
